@@ -1,21 +1,21 @@
-Cashu Platform: Build and Deploy Guide
+# Cashu Platform: Build and Deploy Guide
 
-**Purpose**
+## Purpose
 - Build and deploy multiple Cashu projects from a single workspace using the platform BOM and aggregator.
 
-**Prerequisites**
+## Prerequisites
 - JDK `21` on PATH (`java -version`).
 - Maven `3.8+` (`mvn -v`).
 - Git with access to the `398ja` organization.
 - Credentials for `https://maven.398ja.xyz` configured in `~/.m2/settings.xml`.
 
-**Repository Layout**
+## Repository Layout
 - BOM POM: `pom.xml` (at repo root)
 - Aggregator POM: `aggregate/pom.xml`
 - Helper scripts: `scripts/add-submodules.sh`, `scripts/deploy-all.sh`
 - Modules checkout location: `modules/`
 
-**Get Sources**
+## Get Sources
 - Option A — submodules (recommended):
   - `scripts/add-submodules.sh`
   - This creates: `modules/cashu-lib`, `modules/cashu-gateway`, `modules/cashu-vault`, `modules/cashu-mint`, `modules/cashu-wallet`, `modules/cashu-client`, `modules/nostr-cashu`.
@@ -23,7 +23,7 @@ Cashu Platform: Build and Deploy Guide
   - `git clone https://github.com/398ja/cashu-lib.git modules/cashu-lib`
   - Repeat for the remaining projects listed above.
 
-**Build**
+## Build
 - Install the BOM locally:
   - `mvn -f pom.xml clean install`
 - Build all present modules via the aggregator (parallel):
@@ -31,14 +31,14 @@ Cashu Platform: Build and Deploy Guide
 - Notes:
   - Profiles in `aggregate/pom.xml` auto-activate when `modules/<name>/pom.xml` exists, allowing partial builds.
 
-**Deploy**
+## Deploy
 - Releases repository:
   - `scripts/deploy-all.sh releases`
 - Snapshots repository:
   - `scripts/deploy-all.sh snapshots`
 - The script passes `-DaltDeploymentRepository` so all modules deploy to a single target (`reposilite-releases` or `reposilite-snapshots`).
 
-**Maven Settings**
+## Maven Settings
 - Add credentials in `~/.m2/settings.xml` with matching IDs:
 
   ```
@@ -60,7 +60,7 @@ Cashu Platform: Build and Deploy Guide
   </settings>
   ```
 
-**Version Alignment**
+## Version Alignment
 - The aggregator does not become the parent POM of module projects.
 - For consistent dependency versions, each module should import the platform BOM in its own POM:
 
@@ -78,12 +78,12 @@ Cashu Platform: Build and Deploy Guide
   </dependencyManagement>
   ```
 
-**Partial Builds**
+## Partial Builds
 - Only need `cashu-lib`? Check out `modules/cashu-lib` and run:
   - `mvn -f aggregate/pom.xml clean install`
 - The aggregator will include only present modules.
 
-**Troubleshooting**
+## Troubleshooting
 - Missing credentials error when deploying:
   - Ensure `~/.m2/settings.xml` contains `reposilite-releases`/`reposilite-snapshots` with valid credentials.
 - BOM not found during aggregator build:
@@ -93,9 +93,8 @@ Cashu Platform: Build and Deploy Guide
 - Network timeouts:
   - Re-run with `-e -X` for debug; verify repository endpoints are reachable.
 
-**FAQ**
+## FAQ
 - Can I deploy to both releases and snapshots in one run?
   - No; run the deploy script separately for each channel.
 - Do I have to use submodules?
   - No; plain clones in `modules/` work. Submodules help pin exact commits for reproducible builds.
-

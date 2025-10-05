@@ -1,9 +1,9 @@
-Cashu Platform BOM and Aggregator
+# Cashu Platform BOM and Aggregator
 
-Overview
+## Overview
 - This repository contains the `cashu-platform-bom` at the root (`pom.xml`) and an optional aggregator at `aggregate/pom.xml` to build/deploy multiple Cashu projects in one go.
 
-Quick Start
+## Quick Start
 - Step 1: Install the BOM locally so the aggregator can import it offline:
   - `mvn -f pom.xml clean install`
 - Step 2: Check out the Cashu projects under `modules/` (use git submodules or plain clones).
@@ -14,7 +14,7 @@ Quick Start
   - Releases: `scripts/deploy-all.sh releases` (to https://maven.398ja.xyz/releases)
   - Snapshots: `scripts/deploy-all.sh snapshots` (to https://maven.398ja.xyz/snapshots)
 
-Modules
+## Modules
 - Expected module roots (each is a separate repository checked out under `modules/`):
   - `modules/cashu-lib`
   - `modules/cashu-gateway`
@@ -24,13 +24,13 @@ Modules
   - `modules/cashu-client`
   - `modules/nostr-cashu`
 
-Notes
+## Notes
 - The aggregator imports the platform BOM, so all modules inherit the aligned versions defined here.
 - Profiles in `aggregate/pom.xml` activate only if the corresponding `modules/<name>/pom.xml` exists, allowing partial builds.
 - Ensure `~/.m2/settings.xml` has `<server>` credentials for any `<distributionManagement>` repositories required by the individual modules.
 - To force a unified target repo for deployment, this project’s script passes `-DaltDeploymentRepository`.
 
-Maven settings
+## Maven settings
 - Add credentials in `~/.m2/settings.xml` for the reposilite endpoints. The `<id>` must match the id used by the deploy command:
 
   ````
@@ -52,10 +52,10 @@ Maven settings
   </settings>
   ````
 
-Important
+## Important
 - The aggregator orchestrates builds but does not become the parent POM of the individual modules. For full version alignment, each module should import `cashu-platform-bom` or adopt it as a parent, as appropriate.
 
-Further Reading
+## Further Reading
 - Detailed guide: `docs/USAGE.md`
 - CI/CD with GitHub Actions: `docs/CI.md`
 - Aggregator POM: `aggregate/pom.xml`

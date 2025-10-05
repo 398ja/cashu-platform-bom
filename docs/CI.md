@@ -1,10 +1,10 @@
-Cashu Platform CI/CD
+# Cashu Platform CI/CD
 
-Overview
+## Overview
 - GitHub Actions workflows build and deploy aggregated Cashu projects using the platform BOM.
 - Requires modules checked out under `modules/` (submodules recommended for CI).
 
-Workflows
+## Workflows
 - Build: `.github/workflows/build.yml`
   - Triggers: `push` (all branches), `pull_request`.
   - Steps:
@@ -25,34 +25,34 @@ Workflows
     - Install the BOM.
     - Deploy aggregated modules with `-DaltDeploymentRepository` to unify the target repo.
 
-Required GitHub Secrets
+## Required GitHub Secrets
 - `REPO_USER`: username for `https://maven.398ja.xyz`.
 - `REPO_TOKEN`: password or token for `https://maven.398ja.xyz`.
 - Optional for signing:
   - `GPG_PRIVATE_KEY`: ASCII-armored private key content.
   - `GPG_PASSPHRASE`: passphrase for the private key.
 
-Repository IDs and URLs
+## Repository IDs and URLs
 - Releases: `SERVER_ID = reposilite-releases`, `REPO_URL = https://maven.398ja.xyz/releases`.
 - Snapshots: `SERVER_ID = reposilite-snapshots`, `REPO_URL = https://maven.398ja.xyz/snapshots`.
 
-Usage
+## Usage
 - Build runs automatically on pushes and PRs.
 - Manual deploy:
   - In GitHub → Actions → `Deploy` → `Run workflow` → choose `releases` or `snapshots`.
 - Tag-based deploy:
   - Create tag `vX.Y.Z` and push it; the workflow deploys to `releases`.
 
-Notes
+## Notes
 - Ensure submodules in `modules/` point to the desired commit SHAs for reproducible builds.
 - Each module should import `cashu-platform-bom` to align dependency versions.
 - If some modules are absent, the aggregator builds only those present (profiles auto-activate).
 
-GitHub Environments (Recommended)
+## GitHub Environments (Recommended)
 - Create two environments in your repository: `releases` and `snapshots`.
 - Why: environment-scoped secrets and optional approvals for production deployments.
 
-Setup Steps
+## Setup Steps
 1) In GitHub → Settings → Environments → New environment → create `snapshots` and `releases`.
 2) For each environment, add secrets with the same names used in the workflow:
    - `REPO_USER`, `REPO_TOKEN`, optionally `GPG_PRIVATE_KEY`, `GPG_PASSPHRASE`.
@@ -64,7 +64,7 @@ Setup Steps
    - Manual `channel=snapshots` → environment `snapshots`.
    - Tag push (`v*`) → environment `releases`.
 
-Notes on Secrets Resolution
+## Notes on Secrets Resolution
 - The workflow references `secrets.REPO_USER` and `secrets.REPO_TOKEN`.
 - When a job targets an environment, GitHub exposes environment-level secrets to the `secrets` context.
 - You can keep the same secret names across environments; values differ per environment.
