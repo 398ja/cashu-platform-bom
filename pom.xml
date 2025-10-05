@@ -233,7 +233,7 @@
                 <version>${flyway.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.hibernate.orm</groupId>
+                <groupId>org.hibernate</groupId>
                 <artifactId>hibernate-envers</artifactId>
                 <version>${hibernate-envers.version}</version>
             </dependency>
@@ -274,6 +274,11 @@
             <dependency>
                 <groupId>io.github.resilience4j</groupId>
                 <artifactId>resilience4j-retry</artifactId>
+                <version>${resilience4j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.resilience4j</groupId>
+                <artifactId>resilience4j-circuitbreaker</artifactId>
                 <version>${resilience4j.version}</version>
             </dependency>
 
