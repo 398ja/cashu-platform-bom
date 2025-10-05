@@ -1,0 +1,80 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Target repository'
+        required: true
+        default: 'releases'
+        type: choice
+        options: ['releases', 'snapshots']
+  push:
+    tags:
+      - 'v*'
+
+env:
+  RELEASES_URL: https://maven.398ja.xyz/releases
+  SNAPSHOTS_URL: https://maven.398ja.xyz/snapshots
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Assign environment dynamically based on selected/derived channel
+    environment: ${{ steps.chan.outputs.channel }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0
+
+      - name: Determine channel
+        id: chan
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            echo "channel=releases" >> $GITHUB_OUTPUT
+          else
+            echo "channel=${{ inputs.channel }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Validate tag format (push events)
+        if: ${{ github.event_name == 'push' }}
+        shell: bash
+        run: |
+          REF="${GITHUB_REF#refs/tags/}"
+          if [[ ! "$REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.].*)?$ ]]; then
+            echo "Tag '$REF' does not match vMAJOR.MINOR.PATCH[[-|.]suffix]"
+            exit 1
+          fi
+
+      - name: Set env vars
+        id: setenv
+        shell: bash
+        run: |
+          if [[ "${{ steps.chan.outputs.channel }}" == "releases" ]]; then
+            echo "SERVER_ID=reposilite-releases" >> $GITHUB_ENV
+            echo "REPO_URL=${{ env.RELEASES_URL }}" >> $GITHUB_ENV
+          else
+            echo "SERVER_ID=reposilite-snapshots" >> $GITHUB_ENV
+            echo "REPO_URL=${{ env.SNAPSHOTS_URL }}" >> $GITHUB_ENV
+          fi
+
+      - name: Setup Java 21 + Maven server credentials
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          server-id: ${{ env.SERVER_ID }}
+          server-username: ${{ secrets.REPO_USER }}
+          server-password: ${{ secrets.REPO_TOKEN }}
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Install BOM locally
+        run: mvn -B -f pom.xml clean install
+
+      - name: Deploy aggregated modules
+        run: mvn -B -f aggregate/pom.xml -T 1C -DskipTests -DaltDeploymentRepository="${SERVER_ID}::default::${REPO_URL}" deploy
