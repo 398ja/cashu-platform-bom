@@ -56,8 +56,8 @@
 - The aggregator orchestrates builds but does not become the parent POM of the individual modules. For full version alignment, each module should import `cashu-platform-bom` or adopt it as a parent, as appropriate.
 
 ## Further Reading
-- Detailed guide: `docs/USAGE.md`
-- CI/CD with GitHub Actions: `docs/CI.md`
-- Aggregator POM: `aggregate/pom.xml`
-- Submodule helper: `scripts/add-submodules.sh`
-- Deploy helper: `scripts/deploy-all.sh`
+- Detailed guide: [USAGE.md](docs/USAGE.md)
+- CI/CD with GitHub Actions: [CI.md](docs/CI.md)
+- Aggregator POM: [pom.xml](aggregate/pom.xml)
+- Submodule helper: [add-submodules.sh](scripts/add-submodules.sh)
+- Deploy helper: [deploy-all.sh](scripts/deploy-all.sh)
