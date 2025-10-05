@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>xyz.tcheeric</groupId>
+    <artifactId>cashu-platform-aggregate</artifactId>
+    <version>1.0.0</version>
+    <packaging>pom</packaging>
+
+    <name>Cashu Platform Aggregator</name>
+    <description>Build and deploy the Cashu ecosystem from one place</description>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <java.version>21</java.version>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
+    </properties>
+
+    <!-- Import the platform BOM so all aggregated modules inherit aligned versions -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>xyz.tcheeric</groupId>
+                <artifactId>cashu-platform-bom</artifactId>
+                <version>1.0.0</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <!-- Keep base <modules> empty; profiles below activate modules only when present locally. -->
+    <modules>
+    </modules>
+
+    <profiles>
+        <profile>
+            <id>cashu-lib</id>
+            <activation>
+                <file>
+                    <exists>../modules/cashu-lib/pom.xml</exists>
+                </file>
+            </activation>
+            <modules>
+                <module>../modules/cashu-lib</module>
+            </modules>
+        </profile>
+
+        <profile>
+            <id>cashu-gateway</id>
+            <activation>
+                <file>
+                    <exists>../modules/cashu-gateway/pom.xml</exists>
+                </file>
+            </activation>
+            <modules>
+                <module>../modules/cashu-gateway</module>
+            </modules>
+        </profile>
+
+        <profile>
+            <id>cashu-vault</id>
+            <activation>
+                <file>
+                    <exists>../modules/cashu-vault/pom.xml</exists>
+                </file>
+            </activation>
+            <modules>
+                <module>../modules/cashu-vault</module>
+            </modules>
+        </profile>
+
+        <profile>
+            <id>cashu-mint</id>
+            <activation>
+                <file>
+                    <exists>../modules/cashu-mint/pom.xml</exists>
+                </file>
+            </activation>
+            <modules>
+                <module>../modules/cashu-mint</module>
+            </modules>
+        </profile>
+
+        <profile>
+            <id>cashu-wallet</id>
+            <activation>
+                <file>
+                    <exists>../modules/cashu-wallet/pom.xml</exists>
+                </file>
+            </activation>
+            <modules>
+                <module>../modules/cashu-wallet</module>
+            </modules>
+        </profile>
+
+        <profile>
+            <id>cashu-client</id>
+            <activation>
+                <file>
+                    <exists>../modules/cashu-client/pom.xml</exists>
+                </file>
+            </activation>
+            <modules>
+                <module>../modules/cashu-client</module>
+            </modules>
+        </profile>
+
+        <profile>
+            <id>nostr-cashu</id>
+            <activation>
+                <file>
+                    <exists>../modules/nostr-cashu/pom.xml</exists>
+                </file>
+            </activation>
+            <modules>
+                <module>../modules/nostr-cashu</module>
+            </modules>
+        </profile>
+    </profiles>
+
+</project>
+
