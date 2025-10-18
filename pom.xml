@@ -6,11 +6,11 @@
 
     <groupId>xyz.tcheeric</groupId>
     <artifactId>cashu-platform-bom</artifactId>
-    <version>1.1.0</version>
+    <version>1.1.1</version>
     <packaging>pom</packaging>
 
     <name>Cashu Platform BOM</name>
-    <description>Bill of Materials for Cashu ecosystem and related projects</description>
+    <description>Bill of Materials for Cashu ecosystem and related projects - Updated to nostr-java-bom 1.1.8</description>
     <url>https://github.com/tcheeric/cashu-lib</url>
 
     <properties>
@@ -20,7 +20,7 @@
         <maven.compiler.target>21</maven.compiler.target>
 
         <!-- Import version from nostr-java-bom -->
-        <nostr-java-bom.version>1.0.0</nostr-java-bom.version>
+        <nostr-java-bom.version>1.1.8</nostr-java-bom.version>
 
         <!-- Cashu Ecosystem Versions -->
         <cashu-lib.version>0.4.1</cashu-lib.version>
