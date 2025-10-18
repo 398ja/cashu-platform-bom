@@ -6,7 +6,7 @@
 
     <groupId>xyz.tcheeric</groupId>
     <artifactId>cashu-platform-bom</artifactId>
-    <version>1.1.1</version>
+    <version>1.1.2</version>
     <packaging>pom</packaging>
 
     <name>Cashu Platform BOM</name>
