@@ -28,7 +28,7 @@
         <cashu-vault.version>0.2.4</cashu-vault.version>
         <cashu-mint.version>0.2.4</cashu-mint.version>
         <cashu-wallet.version>0.1.2</cashu-wallet.version>
-        <cashu-client.version>0.3.0-M2</cashu-client.version>
+        <cashu-client.version>1.1.0</cashu-client.version>
         <cashu-mint-admin.version>0.2.4</cashu-mint-admin.version>
         <nostr-cashu.version>0.2.1</nostr-cashu.version>
 
