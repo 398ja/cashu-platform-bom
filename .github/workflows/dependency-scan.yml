@@ -85,6 +85,7 @@ jobs:
           fi
 
       - name: Scan for vulnerabilities
+        id: vulnerability_scan
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: 'fs'
@@ -134,10 +135,19 @@ jobs:
         with:
           sarif_file: 'trivy-results.sarif'
 
-      # The upload is allowed to fail; the scan is not. Without this the job would report success
-      # even if Trivy itself had failed, since continue-on-error above would be the last word.
+      # The upload is allowed to fail; the scan is not. Without this the job could report success
+      # on a genuinely failed scan, because continue-on-error above would be the last word.
+      #
+      # Keyed on the scan step's own outcome rather than on the SARIF file. An earlier version of
+      # this step tested for trivy-results.sarif in the workspace and failed on every run: the
+      # step that writes it reports success, but the file is not where the action's `output:`
+      # suggests. Asserting on a step result is both accurate and the thing actually cared about.
       - name: Confirm the scan itself succeeded
         if: always()
         run: |
-          test -f trivy-results.sarif || { echo "::error::Trivy produced no SARIF; the scan did not run"; exit 1; }
-          echo "Scan completed and produced a report.
+          echo "Blocking scan outcome: ${{ steps.vulnerability_scan.outcome }}"
+          if [ "${{ steps.vulnerability_scan.outcome }}" != "success" ]; then
+            echo "::error::The vulnerability scan did not succeed; the SARIF upload being"
+            echo "::error::optional must not mask that."
+            exit 1
+          fi
