@@ -116,7 +116,28 @@ jobs:
         # Not on pull requests from forks: security-events: write is not granted there whatever
         # the workflow asks for, so the step can only fail. Push and schedule runs cover the same
         # code.
+        #
+        # continue-on-error because this repository is PRIVATE and code scanning needs GitHub
+        # Advanced Security, so the upload returns "Resource not accessible by integration" and
+        # can never succeed here. Without this the scan job is permanently red on master while the
+        # scan itself passes -- a check that cannot go green, which is the failure mode the AppSec
+        # review kept finding and the one thing worse than no check at all.
+        #
+        # This is scoped to the private case on purpose. The sibling cashu-vault added the same
+        # flag, then correctly REVERTED it (398ja/cashu-vault#139) once that repository went
+        # public: there the upload can succeed, so swallowing a failure would hide the Security
+        # tab quietly ceasing to update. If this repository is ever made public, revert this hunk
+        # for the same reason.
+        continue-on-error: true
         if: always() && github.event_name != 'pull_request'
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-results.sarif'
+
+      # The upload is allowed to fail; the scan is not. Without this the job would report success
+      # even if Trivy itself had failed, since continue-on-error above would be the last word.
+      - name: Confirm the scan itself succeeded
+        if: always()
+        run: |
+          test -f trivy-results.sarif || { echo "::error::Trivy produced no SARIF; the scan did not run"; exit 1; }
+          echo "Scan completed and produced a report.
