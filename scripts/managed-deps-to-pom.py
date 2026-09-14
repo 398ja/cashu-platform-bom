@@ -13,6 +13,7 @@ The output is a scanning artefact and is never published or built against.
 """
 import sys
 import xml.etree.ElementTree as ET
+from xml.sax.saxutils import escape
 
 POM_NS = "http://maven.apache.org/POM/4.0.0"
 NS = {"m": POM_NS}
@@ -23,6 +24,10 @@ NS = {"m": POM_NS}
 # skipping them, since a public advisory database holds no advisories for private artifacts --
 # the code inside them is scanned in its own repository, which is where it can actually be fixed.
 FIRST_PARTY_GROUP_PREFIX = "xyz.tcheeric"
+
+# Bound on ${a} -> ${b} -> value chains. Maven allows arbitrary nesting, but a cycle would
+# otherwise loop forever, and no real BOM nests this deeply.
+MAX_PROPERTY_EXPANSIONS = 5
 
 TEMPLATE = """<project xmlns="http://maven.apache.org/POM/4.0.0">
   <modelVersion>4.0.0</modelVersion>
@@ -35,19 +40,34 @@ TEMPLATE = """<project xmlns="http://maven.apache.org/POM/4.0.0">
 </project>
 """
 
+USAGE = "usage: managed-deps-to-pom.py <source-pom> <destination-pom>"
+
+
+class UnresolvedVersionError(Exception):
+    """A managed version could not be reduced to a literal.
+
+    Raised rather than returning a sentinel because the caller must not be able
+    to ignore it by accident: a dependency dropped here is a dependency the
+    vulnerability scan will never see, which is the precise failure this whole
+    script exists to prevent.
+    """
+
 
 def resolve(value, properties):
-    """Expand ${...} property references, tolerating one level of indirection."""
-    for _ in range(5):
+    """Expand ${...} property references into a literal version."""
+    for _ in range(MAX_PROPERTY_EXPANSIONS):
         if "${" not in value:
-            break
+            return value
         start = value.index("${")
-        end = value.index("}", start)
+        end = value.find("}", start)
+        if end == -1:
+            raise UnresolvedVersionError(f"malformed property reference in {value!r}")
         name = value[start + 2:end]
         if name not in properties:
-            return None
+            raise UnresolvedVersionError(f"no property {name!r} for {value!r}")
         value = value[:start] + properties[name] + value[end + 1:]
-    return None if "${" in value else value
+    raise UnresolvedVersionError(
+        f"{value!r} still unresolved after {MAX_PROPERTY_EXPANSIONS} expansions")
 
 
 def read_properties(root):
@@ -58,45 +78,76 @@ def read_properties(root):
             for child in node}
 
 
+def is_scannable(dependency):
+    """Whether this managed entry maps to a third-party artifact worth scanning."""
+    # A BOM import contributes no artifact of its own; its contents are managed
+    # by whichever project imports it.
+    if dependency.findtext("m:scope", default="", namespaces=NS) == "import":
+        return False
+    group = dependency.findtext("m:groupId", default="", namespaces=NS).strip()
+    return not group.startswith(FIRST_PARTY_GROUP_PREFIX)
+
+
 def managed_dependencies(root, properties):
+    """Yield (group, artifact, version) for every scannable managed entry.
+
+    Raises UnresolvedVersionError if a scannable entry has no usable version, so
+    that a coordinate can never disappear from the scan unnoticed.
+    """
     path = "m:dependencyManagement/m:dependencies/m:dependency"
     for dependency in root.findall(path, NS):
-        version = dependency.findtext("m:version", default="", namespaces=NS)
-        resolved = resolve(version.strip(), properties) if version else None
-        if not resolved:
-            continue
-        # A BOM import contributes no artifact of its own to scan; its contents
-        # are managed by whichever project imports it.
-        if dependency.findtext("m:scope", default="", namespaces=NS) == "import":
+        if not is_scannable(dependency):
             continue
         group = dependency.findtext("m:groupId", default="", namespaces=NS).strip()
-        if group.startswith(FIRST_PARTY_GROUP_PREFIX):
-            continue
-        yield (group,
-               dependency.findtext("m:artifactId", default="", namespaces=NS).strip(),
-               resolved)
+        artifact = dependency.findtext("m:artifactId", default="", namespaces=NS).strip()
+        version = dependency.findtext("m:version", default="", namespaces=NS).strip()
+        if not version:
+            raise UnresolvedVersionError(f"{group}:{artifact} declares no version")
+        try:
+            yield group, artifact, resolve(version, properties)
+        except UnresolvedVersionError as error:
+            raise UnresolvedVersionError(f"{group}:{artifact}: {error}") from error
 
 
-def main():
-    source, destination = sys.argv[1], sys.argv[2]
-    root = ET.parse(source).getroot()
-    properties = read_properties(root)
-
-    rendered = "".join(
+def render(root, properties):
+    return "".join(
         f"    <dependency>\n"
-        f"      <groupId>{group}</groupId>\n"
-        f"      <artifactId>{artifact}</artifactId>\n"
-        f"      <version>{version}</version>\n"
+        f"      <groupId>{escape(group)}</groupId>\n"
+        f"      <artifactId>{escape(artifact)}</artifactId>\n"
+        f"      <version>{escape(version)}</version>\n"
         f"    </dependency>\n"
         for group, artifact, version in managed_dependencies(root, properties))
 
-    if not rendered:
+
+def main():
+    if len(sys.argv) != 3:
+        sys.exit(USAGE)
+    source, destination = sys.argv[1], sys.argv[2]
+
+    try:
+        root = ET.parse(source).getroot()
+    except (OSError, ET.ParseError) as error:
+        sys.exit(f"error: cannot read {source}: {error}")
+
+    try:
+        dependencies = render(root, read_properties(root))
+    except UnresolvedVersionError as error:
+        sys.exit(f"error: {error}\n"
+                 "A dependency that cannot be resolved would be missing from the "
+                 "vulnerability scan, so this is fatal rather than skipped.")
+
+    if not dependencies:
         sys.exit(f"error: no managed dependencies resolved from {source}; "
                  "refusing to emit an empty pom that would scan clean")
 
-    with open(destination, "w") as handle:
-        handle.write(TEMPLATE.format(dependencies=rendered))
-    print(f"{rendered.count('<dependency>')} managed dependencies written to {destination}")
+    try:
+        with open(destination, "w") as handle:
+            handle.write(TEMPLATE.format(dependencies=dependencies))
+    except OSError as error:
+        sys.exit(f"error: cannot write {destination}: {error}")
+
+    print(f"{dependencies.count('<dependency>')} managed dependencies "
+          f"written to {destination}")
 
 
 if __name__ == "__main__":

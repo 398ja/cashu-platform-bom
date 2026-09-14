@@ -51,8 +51,8 @@ BOM = """<project xmlns="http://maven.apache.org/POM/4.0.0">
 """
 
 
-def render(bom_text):
-    """Run the generator over bom_text, returning (exit_code, output_pom)."""
+def render_with_message(bom_text):
+    """Run the generator, returning (exit_code, output_pom, combined_output)."""
     with tempfile.TemporaryDirectory() as directory:
         source = Path(directory) / "pom.xml"
         destination = Path(directory) / "out.xml"
@@ -61,7 +61,14 @@ def render(bom_text):
             [sys.executable, str(SCRIPT), str(source), str(destination)],
             capture_output=True, text=True)
         rendered = destination.read_text() if destination.exists() else ""
-        return completed.returncode, rendered
+        return (completed.returncode, rendered,
+                completed.stdout + completed.stderr)
+
+
+def render(bom_text):
+    """Run the generator over bom_text, returning (exit_code, output_pom)."""
+    exit_code, rendered, _ = render_with_message(bom_text)
+    return exit_code, rendered
 
 
 class ManagedDependencyRenderingTest(unittest.TestCase):
@@ -105,26 +112,49 @@ class ManagedDependencyRenderingTest(unittest.TestCase):
         self.assertIn("<version>42.7.12</version>", rendered)
         self.assertNotIn("${", rendered)
 
-    # A reference that cannot be resolved must be dropped rather than written
-    # out verbatim, for the same reason.
-    def test_never_emits_unresolved_references(self):
-        _, rendered = render(BOM.replace("${postgresql.version}", "${nope}-final"))
-        self.assertNotIn("${", rendered)
-        self.assertNotIn("postgresql", rendered)
+    # A reference that cannot be resolved must abort the run. Dropping the entry
+    # instead would remove a real coordinate from the scan and still report
+    # success, which is the failure this script exists to prevent -- and silently
+    # skipping one dependency is that same failure at a smaller scale.
+    def test_fails_on_unresolvable_reference(self):
+        exit_code, rendered, message = render_with_message(
+            BOM.replace("${postgresql.version}", "${nope}-final"))
+        self.assertNotEqual(0, exit_code)
+        self.assertEqual("", rendered)
+        self.assertIn("postgresql", message)
+        self.assertIn("nope", message)
+
+    # A malformed reference with no closing brace must be reported, not raised as
+    # an unhandled ValueError from deep inside string handling.
+    def test_fails_readably_on_malformed_reference(self):
+        exit_code, _, message = render_with_message(
+            BOM.replace("${postgresql.version}", "${unclosed"))
+        self.assertNotEqual(0, exit_code)
+        self.assertIn("malformed", message)
+        self.assertNotIn("Traceback", message)
+
+    # A scannable entry with no version at all cannot be scanned, so it must be
+    # reported rather than skipped.
+    def test_fails_on_missing_version(self):
+        exit_code, _, message = render_with_message(
+            BOM.replace("<version>1.2.3</version>", ""))
+        self.assertNotEqual(0, exit_code)
+        self.assertIn("literal", message)
 
     # Expansion is bounded at five rounds to avoid looping forever on a cyclic
     # property. If a chain is deeper than that, the value is still unresolved
     # when the loop gives up, and it must be dropped rather than emitted with a
     # ${...} still in it -- which is the one case the final guard exists for.
-    def test_drops_values_nested_deeper_than_the_bound(self):
+    def test_fails_on_chains_nested_deeper_than_the_bound(self):
         chain = "".join(f"<p{i}>${{p{i + 1}}}</p{i}>" for i in range(8))
         deep = BOM.replace(
             "<postgresql.version>42.7.12</postgresql.version>",
             f"<postgresql.version>${{p0}}</postgresql.version>{chain}"
             "<p8>42.7.12</p8>")
-        _, rendered = render(deep)
-        self.assertNotIn("${", rendered)
-        self.assertNotIn("postgresql", rendered)
+        exit_code, rendered, message = render_with_message(deep)
+        self.assertNotEqual(0, exit_code)
+        self.assertEqual("", rendered)
+        self.assertIn("unresolved", message)
 
     # First-party artifacts are not published to public repositories, so a scanner
     # cannot resolve them; in bulk those failed lookups earn an HTTP 429 that aborts
@@ -144,6 +174,33 @@ class ManagedDependencyRenderingTest(unittest.TestCase):
         exit_code, rendered = render(empty)
         self.assertNotEqual(0, exit_code)
         self.assertEqual("", rendered)
+
+    # A BOM with no third-party entries at all must fail rather than emit a valid
+    # but empty pom, which would scan clean and report success.
+    def test_fails_on_empty_result(self):
+        only_first_party = """<project xmlns="http://maven.apache.org/POM/4.0.0">
+          <modelVersion>4.0.0</modelVersion>
+          <groupId>g</groupId><artifactId>a</artifactId><version>1</version>
+          <dependencyManagement><dependencies>
+            <dependency>
+              <groupId>xyz.tcheeric</groupId>
+              <artifactId>internal</artifactId>
+              <version>1.0</version>
+            </dependency>
+          </dependencies></dependencyManagement>
+        </project>"""
+        exit_code, rendered, message = render_with_message(only_first_party)
+        self.assertNotEqual(0, exit_code)
+        self.assertEqual("", rendered)
+        self.assertIn("refusing", message)
+
+    # Wrong invocation must produce usage text, not an IndexError traceback.
+    def test_reports_usage_without_arguments(self):
+        completed = subprocess.run([sys.executable, str(SCRIPT)],
+                                   capture_output=True, text=True)
+        self.assertNotEqual(0, completed.returncode)
+        self.assertIn("usage:", completed.stdout + completed.stderr)
+        self.assertNotIn("Traceback", completed.stdout + completed.stderr)
 
 
 if __name__ == "__main__":
