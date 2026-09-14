@@ -63,8 +63,21 @@ jobs:
       # guarded against is precisely a scan that passes because it examined nothing.
       - name: Assert the generated pom is non-empty
         run: |
-          count=$(grep -c '<dependency>' target/scan/pom.xml || echo 0)
+          set -euo pipefail
+          test -f target/scan/pom.xml || { echo "::error::No generated pom"; exit 1; }
+          # `grep -c` prints 0 AND exits 1 when it matches nothing, so the obvious
+          # `$(grep -c ... || echo 0)` yields the two-line string "0\n0". That is not an integer,
+          # so `[ "$count" -lt 10 ]` errors out instead of failing the build -- and the step would
+          # PASS on precisely the empty pom this guard exists to reject. Verified before and after.
+          count=$(grep -c '<dependency>' target/scan/pom.xml || true)
+          count=${count:-0}
           echo "Third-party managed dependencies rendered: $count"
+          case "$count" in
+            ''|*[!0-9]*)
+              echo "::error::Could not read a dependency count from the generated pom."
+              exit 1
+              ;;
+          esac
           if [ "$count" -lt 10 ]; then
             echo "::error::Only $count dependencies rendered; property resolution likely broke."
             echo "::error::Refusing to report a green scan over an empty pom (issue #2)."
