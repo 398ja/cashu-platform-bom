@@ -36,7 +36,7 @@
         <spring-boot.version>3.5.5</spring-boot.version>
 
         <!-- Cashu-specific Dependency Versions -->
-        <postgresql.version>42.7.7</postgresql.version>
+        <postgresql.version>42.7.12</postgresql.version>
         <h2.version>2.2.224</h2.version>
         <flyway.version>11.2.0</flyway.version>
         <hibernate-envers.version>6.6.1.Final</hibernate-envers.version>
@@ -47,7 +47,7 @@
         <hibernate-validator.version>8.0.1.Final</hibernate-validator.version>
         <jakarta-el.version>4.0.2</jakarta-el.version>
         <resilience4j.version>2.1.0</resilience4j.version>
-        <logback.version>1.5.18</logback.version>
+        <logback.version>1.5.34</logback.version>
         <wiremock.version>3.9.1</wiremock.version>
         <jakarta-servlet-api.version>6.0.0</jakarta-servlet-api.version>
         <jqwik.version>1.8.0</jqwik.version>

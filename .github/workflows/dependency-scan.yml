@@ -1,0 +1,109 @@
+name: Dependency vulnerability scan
+
+# AppSec review follow-up (issue #2). This repository had no security scanning at all, which
+# matters more here than elsewhere: a BOM's entire job is choosing which versions the rest of the
+# ecosystem gets, so an outdated pin here propagates everywhere downstream.
+#
+# The obvious fix does not work. A Bill of Materials declares no dependencies: every coordinate
+# lives inside <dependencyManagement>, which says "if you use this, use this version" rather than
+# "this is used". Scanners that read pom.xml find nothing to scan, and a CycloneDX SBOM of this
+# project is empty for the same reason. Both were measured before writing this workflow:
+#
+#   trivy fs .                      -> 2 poms detected, 0 vulnerabilities
+#   cyclonedx makeAggregateBom      -> 0 components
+#
+# First-party xyz.tcheeric artifacts are left out of the generated pom. A scanner resolves every
+# coordinate against public repositories, and these are not published there: the lookups fail, and
+# in bulk they earn an HTTP 429 that aborts the entire scan. Nothing is lost, because a public
+# advisory database holds no advisories for private artifacts; that code is scanned in its own
+# repository, which is the only place it can actually be fixed.
+#
+# ...while postgresql was pinned at a version carrying two HIGH advisories. A green scan, over
+# exactly the file that decided that version.
+#
+# So the managed entries are first reprojected into ordinary <dependencies> with properties
+# resolved, and that generated pom is what gets scanned. Verified to work: with the pre-fix pins
+# the scan reports CVE-2026-42198 and CVE-2026-54291 against postgresql 42.7.7, and with the
+# corrected pins both disappear. A check that cannot fail is not a check, and this one was
+# confirmed able to fail before being trusted.
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+  schedule:
+    # Weekly, because a dependency does not have to change for it to become vulnerable: most
+    # findings arrive as new advisories against versions that were already pinned. For a BOM,
+    # which changes rarely, this scheduled run is the primary way anything is ever noticed.
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # The generator is the load-bearing part of this workflow: if it silently renders nothing,
+      # the scan below passes by examining nothing. Its tests run here for that reason.
+      - name: Test the dependency generator
+        run: python3 scripts/test_managed_deps_to_pom.py
+
+      - name: Render managed dependencies as a scannable pom
+        run: |
+          mkdir -p target/scan
+          python3 scripts/managed-deps-to-pom.py pom.xml target/scan/pom.xml
+
+      # The generator exits non-zero if it resolves nothing, but assert here too: this is the
+      # step that decides whether the scan below has any input at all, and the failure mode being
+      # guarded against is precisely a scan that passes because it examined nothing.
+      - name: Assert the generated pom is non-empty
+        run: |
+          count=$(grep -c '<dependency>' target/scan/pom.xml || echo 0)
+          echo "Third-party managed dependencies rendered: $count"
+          if [ "$count" -lt 10 ]; then
+            echo "::error::Only $count dependencies rendered; property resolution likely broke."
+            echo "::error::Refusing to report a green scan over an empty pom (issue #2)."
+            exit 1
+          fi
+
+      - name: Scan for vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: 'fs'
+          scan-ref: 'target/scan'
+          scanners: 'vuln'
+          # CRITICAL blocks; HIGH reports. This matches the sibling repositories, and the reasoning
+          # is the same: a check that is always red is ignored just as thoroughly as one that is
+          # always green. HIGH findings still reach the Security tab via the SARIF upload below,
+          # and the weekly schedule surfaces them without needing a push.
+          severity: 'CRITICAL'
+          exit-code: '1'
+          ignore-unfixed: true
+          format: 'table'
+
+      - name: Generate SARIF report
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: 'fs'
+          scan-ref: 'target/scan'
+          scanners: 'vuln'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'
+          ignore-unfixed: true
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload SARIF
+        # Not on pull requests from forks: security-events: write is not granted there whatever
+        # the workflow asks for, so the step can only fail. Push and schedule runs cover the same
+        # code.
+        if: always() && github.event_name != 'pull_request'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
