@@ -20,8 +20,15 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # Assign environment dynamically based on selected/derived channel
-    environment: ${{ steps.chan.outputs.channel }}
+    # The environment is derived from the same rule the `Determine channel` step applies: a tag
+    # push deploys to releases, a manual run deploys to whatever the operator chose.
+    #
+    # It cannot read that step's output. `environment:` is evaluated before the job starts, so the
+    # `steps` context does not exist yet -- only github, inputs, matrix, needs, strategy and vars
+    # do. The previous `${{ steps.chan.outputs.channel }}` made the whole file invalid, which is
+    # why this workflow had never run: 17 runs, 0 jobs, 0 successes, and GitHub listing it by path
+    # instead of by name because it could not parse it far enough to read `name:`.
+    environment: ${{ github.event_name == 'push' && 'releases' || inputs.channel }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -67,7 +74,11 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
-          server-id: ${{ env.SERVER_ID }}
+          # Same derivation as `environment:` above rather than env.SERVER_ID. `with:` is
+          # evaluated when the step starts, and SERVER_ID is written to $GITHUB_ENV by an earlier
+          # step, so it does resolve -- but repeating the rule from a context that is always
+          # available removes the ordering dependency, which is what made this fragile.
+          server-id: ${{ github.event_name == 'push' && 'reposilite-releases' || (inputs.channel == 'releases' && 'reposilite-releases' || 'reposilite-snapshots') }}
           server-username: ${{ secrets.REPO_USER }}
           server-password: ${{ secrets.REPO_TOKEN }}
           gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
